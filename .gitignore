@@ -56,3 +56,5 @@ CodeCoverage/
 *.VisualState.xml
 TestResult.xml
 nunit-*.xml
+# Committed deployment package (built by scripts/publish.ps1)
+!/release/

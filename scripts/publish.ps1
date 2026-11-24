@@ -1,12 +1,14 @@
 <#
 .SYNOPSIS
-  Builds a self-contained deployment package (no .NET runtime needed on the server).
-  Output: .\publish\ApiScheduler\  (copy this whole folder to the server, then run install.ps1 there)
+  Builds a self-contained deployment package (no .NET runtime or SDK needed on the server).
+  Output: .\release\ApiScheduler\  - committed to git so the server can simply `git pull`
+  and run release\ApiScheduler\install.ps1 (no internet / NuGet access needed there).
+  Executables are compressed to stay under GitHub's 100 MB per-file limit.
 #>
 param([string]$Configuration = 'Release')
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
-$out  = Join-Path $root 'publish\ApiScheduler'
+$out  = Join-Path $root 'release\ApiScheduler'
 
 if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
     throw '.NET is not installed. Install the .NET 10 SDK (x64) from https://dotnet.microsoft.com/download/dotnet/10.0'
@@ -24,7 +26,8 @@ dotnet test (Join-Path $root 'tests\ApiScheduler.Tests') -c $Configuration
 if ($LASTEXITCODE -ne 0) { throw 'Tests failed - not publishing.' }
 
 $common = @('-c', $Configuration, '-r', 'win-x64', '--self-contained', 'true',
-            '-p:PublishSingleFile=true', '-p:IncludeNativeLibrariesForSelfExtract=true', '-p:DebugType=none')
+            '-p:PublishSingleFile=true', '-p:IncludeNativeLibrariesForSelfExtract=true',
+            '-p:EnableCompressionInSingleFile=true', '-p:DebugType=none')
 
 dotnet publish (Join-Path $root 'src\ApiScheduler.Service') @common -o (Join-Path $out 'Service')
 if ($LASTEXITCODE -ne 0) { throw 'Service publish failed.' }
@@ -33,5 +36,8 @@ if ($LASTEXITCODE -ne 0) { throw 'Desktop publish failed.' }
 
 Copy-Item (Join-Path $PSScriptRoot 'install.ps1'), (Join-Path $PSScriptRoot 'uninstall.ps1') $out
 Copy-Item (Join-Path $root 'README.md') $out -ErrorAction SilentlyContinue
+
+$tooBig = Get-ChildItem $out -Recurse -File | Where-Object Length -gt 95MB
+if ($tooBig) { Write-Warning ("Over GitHub's 100 MB limit: " + ($tooBig.Name -join ', ')) }
 
 Write-Host "`nPackage ready: $out" -ForegroundColor Green
