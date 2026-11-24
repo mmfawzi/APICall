@@ -8,6 +8,16 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 $out  = Join-Path $root 'publish\ApiScheduler'
 
+if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
+    throw '.NET is not installed. Install the .NET 10 SDK (x64) from https://dotnet.microsoft.com/download/dotnet/10.0'
+}
+$sdks = @(dotnet --list-sdks 2>$null) | Where-Object { $_ -match '^10\.' }
+if (-not $sdks) {
+    $found = (@(dotnet --list-sdks 2>$null) -join ', ')
+    if (-not $found) { $found = 'none (only the runtime is installed)' }
+    throw ".NET 10 SDK not found. Installed SDKs: $found. Install the '.NET 10 SDK - Windows x64' (not the Runtime / Hosting Bundle) from https://dotnet.microsoft.com/download/dotnet/10.0, then open a NEW PowerShell window."
+}
+
 if (Test-Path $out) { Remove-Item $out -Recurse -Force }
 
 dotnet test (Join-Path $root 'tests\ApiScheduler.Tests') -c $Configuration
