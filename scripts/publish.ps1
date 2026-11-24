@@ -29,9 +29,9 @@ $common = @('-c', $Configuration, '-r', 'win-x64', '--self-contained', 'true',
             '-p:PublishSingleFile=true', '-p:IncludeNativeLibrariesForSelfExtract=true',
             '-p:EnableCompressionInSingleFile=true', '-p:DebugType=none')
 
-dotnet publish (Join-Path $root 'src\ApiScheduler.Service') @common -o (Join-Path $out 'Service')
+dotnet publish (Join-Path $root 'src\ApiScheduler.Service') @common -o (Join-Path $out 'ApiService')
 if ($LASTEXITCODE -ne 0) { throw 'Service publish failed.' }
-dotnet publish (Join-Path $root 'src\ApiScheduler.Desktop') @common -o (Join-Path $out 'Desktop')
+dotnet publish (Join-Path $root 'src\ApiScheduler.Desktop') @common -o (Join-Path $out 'ApiDesktop')
 if ($LASTEXITCODE -ne 0) { throw 'Desktop publish failed.' }
 
 Copy-Item (Join-Path $PSScriptRoot 'install.ps1'), (Join-Path $PSScriptRoot 'uninstall.ps1') $out

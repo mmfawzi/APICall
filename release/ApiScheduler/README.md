@@ -50,7 +50,7 @@ ORDER BY INSERTIONORDERID
 |---|---|
 | **API key** | Encrypted with **Windows DPAPI (machine scope)** and only decryptable on that server. A key can't be stored only as a *hash*, because the service has to send the real key and a hash is one-way. So the key is **encrypted**, and a **SHA-256 hash (fingerprint)** is also stored and shown in the UI so you can check which key is set. The key is never shown again, never logged, and typed into a password box that isn't data-bound. |
 | **SQL password** | Same as the API key (DPAPI), when SQL authentication is used. **Windows authentication is the default** and stores no password. |
-| **Config folder** | `%ProgramData%\ApiScheduler` is limited to SYSTEM, Administrators and the service account. Inherited permissions are removed. |
+| **Install folder** | `D:\APICall` does not inherit the drive's permissions (a data drive often lets ordinary users write). Only SYSTEM and Administrators have full control. The service account can read and run the program and can write only to `Data\`. |
 | **Desktop app** | Needs Administrator (UAC prompt), because it edits the locked config and controls the service. |
 | **SQL injection** | The query is parsed with Microsoft's T-SQL parser (ScriptDom). Only **one** `SELECT` is allowed: no second statement, `GO`, `INTO`, `EXEC`, `OPENROWSET`, `OPENQUERY` or `OPENDATASOURCE`. Table and column names for the update are checked and bracket-quoted. Values are always parameters. |
 | **TLS / HTTP** | HTTPS is required (plain HTTP is allowed only for `localhost` testing). Certificate checking is **never disabled**. For an internal CA that the server doesn't trust, you can *pin* the exact certificate thumbprint, and the host name must still match. Redirects are not followed, so the key can't leak to another host. No cookies. Timeouts are bounded. |
@@ -67,7 +67,7 @@ On a dev machine (needs the .NET 10 SDK):
 .\scripts\publish.ps1
 ```
 
-This runs the tests and creates `publish\ApiScheduler\` with `Service\`, `Desktop\`, `install.ps1` and `uninstall.ps1`.
+This runs the tests and creates `release\ApiScheduler\` with `ApiService\`, `ApiDesktop\`, `install.ps1` and `uninstall.ps1`. That folder is committed to git, so the server only needs `git pull`.
 
 On the server, copy that folder over and run this in an **elevated** PowerShell:
 
@@ -77,7 +77,16 @@ On the server, copy that folder over and run this in an **elevated** PowerShell:
 .\install.ps1 -ServiceAccount 'CORP\svc-apisched'     # or a domain user (prompts for password)
 ```
 
-The installer copies the program to `C:\Program Files\ApiScheduler`. It registers the service with **delayed auto-start** and **automatic restart on failure**, locks down the data folder, adds a Start Menu shortcut and starts the service. Running it again upgrades in place and keeps your config.
+The installer puts everything in **one folder**, `D:\APICall` by default (change it with `-InstallDir 'E:\Apps\APICall'`):
+
+```
+D:\APICall\
+├── ApiService\   ApiScheduler.Service.exe   (the Windows Service)
+├── ApiDesktop\   ApiScheduler.Desktop.exe   (the admin app)
+└── Data\         config.json, state.json, history.jsonl, logs\
+```
+
+It registers the service with **delayed auto-start** and **automatic restart on failure**, locks the folder down, adds a Start Menu shortcut and starts the service. Running it again upgrades in place and keeps `Data\`. If it finds an older install in `C:\Program Files` / `C:\ProgramData`, it moves the settings into `Data\` and removes the old folders.
 
 **SQL login for the service (Windows auth):**
 - **Virtual account:** the login is `DOMAIN\SERVERNAME$`. If SQL Server is on the same machine, use `NT SERVICE\ApiScheduler`.
@@ -103,9 +112,11 @@ To uninstall: `.\uninstall.ps1`. Add `-RemoveData` to also delete the config, hi
 
 | Path | Content |
 |---|---|
-| `%ProgramData%\ApiScheduler\config.json` | Jobs and connections (secrets encrypted) |
-| `%ProgramData%\ApiScheduler\state.json` | Last and next run per job, service heartbeat |
-| `%ProgramData%\ApiScheduler\history.jsonl` | One line per run (rolls over at 5 MB) |
-| `%ProgramData%\ApiScheduler\logs\` | Daily log files (30 days); warnings and errors also go to the Windows Event Log (source `ApiScheduler`) |
+| `D:\APICall\Data\config.json` | Jobs and connections (secrets encrypted). Edit through the app only. |
+| `D:\APICall\Data\state.json` | Last and next run per job, service heartbeat |
+| `D:\APICall\Data\history.jsonl` | One line per run (rolls over at 5 MB) |
+| `D:\APICall\Data\logs\` | Daily log files (30 days); warnings and errors also go to the Windows Event Log (source `ApiScheduler`) |
+
+The apps find `Data\` next to their own folders, so the service and the app always share the same settings.
 
 > DPAPI machine keys belong to the server. A `config.json` copied to another server can't decrypt its secrets, so re-enter the API key there.
